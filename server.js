@@ -19,7 +19,8 @@ const JWT_SECRET = 'gamermatch_super_secret_key_123'; // ในระบบจ�
 let db;
 let queue = [];
 let pendingMatches = {};
-let activeRooms = {}; 
+let activeRooms = {};
+let lobbies = {}; // Lobby System 
 
 initDB().then(database => {
   db = database;
@@ -274,6 +275,86 @@ io.on('connection', (socket) => {
     }
   });
 
+  
+  // === LOBBY SYSTEM ===
+  socket.on('create_lobby', ({ user, prefs, maxPlayers }) => {
+    try {
+      console.log('Received create_lobby from', user.username);
+
+    const lobbyId = Math.random().toString(36).substring(2, 8).toUpperCase(); // 6 char code
+    lobbies[lobbyId] = {
+      id: lobbyId,
+      host: user.id,
+      maxPlayers: maxPlayers || 5,
+      prefs: prefs,
+      users: [{ socketId: socket.id, dbId: user.id, name: user.username, profile: user }],
+      isFilling: false
+    };
+    socket.join(lobbyId);
+    socket.emit('lobby_created', lobbies[lobbyId]);
+      console.log('Emitted lobby_created', lobbyId);
+    } catch(err) {
+      console.error('ERROR in create_lobby:', err);
+    }
+  });
+
+  socket.on('join_lobby', ({ user, lobbyId }) => {
+    const lobby = lobbies[lobbyId];
+    if (!lobby) {
+      return socket.emit('lobby_error', 'Lobby not found');
+    }
+    if (lobby.users.length >= lobby.maxPlayers) {
+      return socket.emit('lobby_error', 'Lobby is full');
+    }
+    if (lobby.users.some(u => u.dbId === user.id)) {
+      return socket.emit('lobby_error', 'Already in lobby');
+    }
+
+    lobby.users.push({ socketId: socket.id, dbId: user.id, name: user.username, profile: user });
+    socket.join(lobbyId);
+    io.to(lobbyId).emit('lobby_updated', lobby);
+  });
+
+  socket.on('leave_lobby', ({ lobbyId }) => {
+    const lobby = lobbies[lobbyId];
+    if (lobby) {
+      lobby.users = lobby.users.filter(u => u.socketId !== socket.id);
+      socket.leave(lobbyId);
+      if (lobby.users.length === 0) {
+        delete lobbies[lobbyId];
+      } else {
+        // If host left, assign new host
+        if (lobby.host === userId || !lobby.users.some(u => u.dbId === lobby.host)) {
+          lobby.host = lobby.users[0].dbId;
+        }
+        io.to(lobbyId).emit('lobby_updated', lobby);
+      }
+    }
+  });
+
+  socket.on('toggle_lobby_fill', ({ lobbyId, isFilling, userId }) => {
+    const lobby = lobbies[lobbyId];
+    if (lobby && lobby.host === userId) { // NOTE: Need to track socket.user on connect
+      lobby.isFilling = isFilling;
+      io.to(lobbyId).emit('lobby_updated', lobby);
+      if (isFilling) tryMatch(); // trigger matchmaking to fill this lobby
+    }
+  });
+
+  socket.on('start_lobby_match', ({ lobbyId }) => {
+    // Converts Lobby into an Active Room
+    const lobby = lobbies[lobbyId];
+    if (lobby) {
+      activeRooms[lobbyId] = lobby.users;
+      io.to(lobbyId).emit('match_started', {
+        roomId: lobbyId,
+        users: lobby.users,
+        isGroupMatch: true
+      });
+      delete lobbies[lobbyId];
+    }
+  });
+
   socket.on('join_queue', (data) => {
     // data = { user, prefs: { targetGender, targetGame, userRankForGame } }
     console.log(`${data.user.username} joined queue for Game: ${data.prefs.targetGame} Rank: ${data.prefs.userRankForGame}`);
@@ -287,7 +368,10 @@ io.on('connection', (socket) => {
   });
 
   const checkMatchPrefs = (matcher, target) => {
-    // 1. เช็คว่าเกมที่เล่น ต้องตรงกัน (ถ้าเป็น Any ก็จะเจอแต่คนที่สุ่ม Any เหมือนกัน)
+    // Prevent matching with self across tabs
+    if (matcher.user.id === target.user.id) return false;
+
+    // 1. เช็คว่าเกมที่เล่น ต้องตรงกัน
     if (matcher.prefs.targetGame !== target.prefs.targetGame) return false;
     
     // 2. เช็คว่า Rank ต้องเท่ากันเป๊ะๆ ในเกมนั้น
@@ -295,41 +379,74 @@ io.on('connection', (socket) => {
        if (matcher.prefs.userRankForGame !== target.prefs.userRankForGame) return false;
     }
     
-    // 3. เช็คเงื่อนไข VIP (เพศ)
+    // 3. เช็คเงื่อนไข VIP (เพศและตำแหน่ง)
     if (!matcher.user.is_vip) return true;
-    if (matcher.prefs.targetGender === 'Any') return true;
-    return target.user.gender === matcher.prefs.targetGender;
+    
+    if (matcher.prefs.targetGender !== 'Any' && target.user.gender !== matcher.prefs.targetGender) return false;
+    if (matcher.prefs.targetRole !== 'Any' && target.user.play_role !== matcher.prefs.targetRole) return false;
+    
+    return true;
   };
 
   const tryMatch = () => {
-    if (queue.length < 2) return;
-    for (let i = 0; i < queue.length; i++) {
-      const p1 = queue[i];
-      for (let j = i + 1; j < queue.length; j++) {
-        const p2 = queue[j];
-        if (checkMatchPrefs(p1, p2) && checkMatchPrefs(p2, p1)) {
-          const roomId = `match_${Date.now()}_${Math.random().toString(36).substring(7)}`; // ทำให้เดา RoomID ยากขึ้น
-          
-          pendingMatches[roomId] = {
-            users: [
-               { id: p1.socketId, dbId: p1.user.id, name: p1.user.username, profile: p1.user }, 
-               { id: p2.socketId, dbId: p2.user.id, name: p2.user.username, profile: p2.user }
-            ],
-            accepted: []
-          };
-
-          io.to(p1.socketId).emit('match_found', { roomId, opponent: p2.user.username, opponentProfile: p2.user });
-          io.to(p2.socketId).emit('match_found', { roomId, opponent: p1.user.username, opponentProfile: p1.user });
-
-          queue.splice(j, 1);
-          queue.splice(i, 1);
-          return; 
+    try {
+      // 1. Fill open lobbies first
+      for (const lobbyId in lobbies) {
+        const lobby = lobbies[lobbyId];
+        if (lobby.isFilling && lobby.users.length < lobby.maxPlayers) {
+          for (let i = queue.length - 1; i >= 0; i--) {
+            const solo = queue[i];
+            
+            // Check if solo matches lobby prefs (using lobby host's profile as target)
+            if (checkMatchPrefs(solo, { prefs: lobby.prefs, user: lobby.users[0].profile }) && lobby.users.length < lobby.maxPlayers) {
+              lobby.users.push({ socketId: solo.socketId, dbId: solo.user.id, name: solo.user.username, profile: solo.user });
+              const userSocket = io.sockets.sockets.get(solo.socketId);
+              if (userSocket) userSocket.join(lobbyId);
+              
+              queue.splice(i, 1);
+              io.to(lobbyId).emit('lobby_updated', lobby);
+              
+              if (lobby.users.length >= lobby.maxPlayers) {
+                lobby.isFilling = false;
+                io.to(lobbyId).emit('lobby_updated', lobby);
+                break;
+              }
+            }
+          }
         }
       }
+
+      // 2. Standard 1v1 Matching (if not filled into a lobby)
+      if (queue.length < 2) return;
+      for (let i = 0; i < queue.length; i++) {
+        const p1 = queue[i];
+        for (let j = i + 1; j < queue.length; j++) {
+          const p2 = queue[j];
+          if (checkMatchPrefs(p1, p2) && checkMatchPrefs(p2, p1)) {
+            const roomId = `match_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+            
+            pendingMatches[roomId] = {
+              users: [
+                 { id: p1.socketId, dbId: p1.user.id, name: p1.user.username, profile: p1.user }, 
+                 { id: p2.socketId, dbId: p2.user.id, name: p2.user.username, profile: p2.user }
+              ],
+              accepted: []
+            };
+
+            io.to(p1.socketId).emit('match_found', { roomId, opponent: p2.user.username, opponentProfile: p2.user });
+            io.to(p2.socketId).emit('match_found', { roomId, opponent: p1.user.username, opponentProfile: p1.user });
+
+            queue.splice(j, 1);
+            queue.splice(i, 1);
+            return; 
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Matchmaking Error: ", e);
     }
   };
 
-  // 2. กดยอมรับ/ปฏิเสธ
   socket.on('accept_match', ({ roomId }) => {
     const match = pendingMatches[roomId];
     if (match) {
@@ -379,19 +496,20 @@ io.on('connection', (socket) => {
   });
   
   // 5. ระบบเชื่อมต่อเสียง (WebRTC Signaling)
+  socket.on('request_voice_connections', ({ roomId }) => { if (!isUserAuthorizedForRoom(socket.id, roomId)) return; socket.to(roomId).emit('voice_connection_requested', { sender: socket.id, roomId }); });
   socket.on('webrtc_offer', ({ roomId, offer }) => {
     if (!isUserAuthorizedForRoom(socket.id, roomId)) return;
-    socket.to(roomId).emit('webrtc_offer', { offer, sender: socket.id });
+    socket.to(roomId).emit('webrtc_offer', { offer, sender: socket.id, roomId });
   });
 
   socket.on('webrtc_answer', ({ roomId, answer }) => {
     if (!isUserAuthorizedForRoom(socket.id, roomId)) return;
-    socket.to(roomId).emit('webrtc_answer', { answer, sender: socket.id });
+    socket.to(roomId).emit('webrtc_answer', { answer, sender: socket.id, roomId });
   });
 
   socket.on('webrtc_ice_candidate', ({ roomId, candidate }) => {
     if (!isUserAuthorizedForRoom(socket.id, roomId)) return;
-    socket.to(roomId).emit('webrtc_ice_candidate', { candidate, sender: socket.id });
+    socket.to(roomId).emit('webrtc_ice_candidate', { candidate, sender: socket.id, roomId });
   });
 
   // 6. การออกจากห้อง
