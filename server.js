@@ -36,7 +36,7 @@ app.post('/api/register', async (req, res) => {
     if (existing) return res.status(400).json({ error: "Username or email already exists" });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const isVip = username.toLowerCase().includes('vip') ? 1 : 0; // จำลอง VIP
+    const isVip = username.toLowerCase().includes('vip') ? true : false; // จำลอง VIP
     const emailToken = require('crypto').randomBytes(20).toString('hex'); // สร้างรหัสยืนยันอีเมลจำลอง
 
     const result = await db.run(
@@ -64,9 +64,9 @@ app.post('/api/verify_email', async (req, res) => {
     const user = await db.get('SELECT * FROM users WHERE email_token = ?', [token]);
     if (!user) return res.status(400).json({ error: 'Invalid or expired verification link.' });
     
-    await db.run('UPDATE users SET email_verified = 1, email_token = NULL WHERE id = ?', [user.id]);
+    await db.run('UPDATE users SET email_verified = TRUE, email_token = NULL WHERE id = ?', [user.id]);
     
-    const safeUser = { id: user.id, username: user.username, email: user.email, email_verified: 1, gender: user.gender, age: user.age, is_vip: user.is_vip, exp: user.exp, game_rank: user.game_rank, is_verified: user.is_verified, bio: user.bio, play_role: user.play_role, avatar_id: user.avatar_id, avatar_url: user.avatar_url };
+    const safeUser = { id: user.id, username: user.username, email: user.email, email_verified: true, gender: user.gender, age: user.age, is_vip: user.is_vip, exp: user.exp, game_rank: user.game_rank, is_verified: user.is_verified, bio: user.bio, play_role: user.play_role, avatar_id: user.avatar_id, avatar_url: user.avatar_url };
     const jwtToken = jwt.sign({ id: user.id, username: user.username, is_vip: user.is_vip }, JWT_SECRET, { expiresIn: '7d' });
     
     res.json({ token: jwtToken, user: safeUser });
@@ -128,7 +128,7 @@ app.post('/api/update_profile', async (req, res) => {
 app.post('/api/verify_identity', async (req, res) => {
   const { userId } = req.body;
   try {
-    await db.run('UPDATE users SET is_verified = 1 WHERE id = ?', [userId]);
+    await db.run('UPDATE users SET is_verified = TRUE WHERE id = ?', [userId]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
