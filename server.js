@@ -318,8 +318,8 @@ io.on('connection', (socket) => {
             accepted: []
           };
 
-          io.to(p1.socketId).emit('match_found', { roomId, opponent: p2.user.username });
-          io.to(p2.socketId).emit('match_found', { roomId, opponent: p1.user.username });
+          io.to(p1.socketId).emit('match_found', { roomId, opponent: p2.user.username, opponentProfile: p2.user });
+          io.to(p2.socketId).emit('match_found', { roomId, opponent: p1.user.username, opponentProfile: p1.user });
 
           queue.splice(j, 1);
           queue.splice(i, 1);
