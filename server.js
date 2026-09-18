@@ -8,7 +8,7 @@ const { initDB } = require('./database');
 
 const app = express();
 app.use(cors());
-app.use(express.json()); // ให้ Express อ่านข้อมูลแบบ JSON ได้
+app.use(express.json({ limit: '10mb' })); // ให้ Express อ่านข้อมูลแบบ JSON ได้
 
 const server = http.createServer(app);
 const io = new Server(server, {
