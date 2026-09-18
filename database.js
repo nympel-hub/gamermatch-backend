@@ -20,13 +20,30 @@ async function initDB() {
       gender TEXT,
       age INTEGER,
       is_vip BOOLEAN DEFAULT 0,
-      exp INTEGER DEFAULT 0
+      exp INTEGER DEFAULT 0,
+      is_verified BOOLEAN DEFAULT 0,
+      game_rank TEXT
     );
 
     CREATE TABLE IF NOT EXISTS friends (
       user_id INTEGER,
       friend_id INTEGER,
       PRIMARY KEY (user_id, friend_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS user_ranks (
+      user_id INTEGER,
+      game TEXT,
+      rank TEXT,
+      PRIMARY KEY (user_id, game)
+    );
+
+    CREATE TABLE IF NOT EXISTS dms (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sender_id INTEGER,
+      receiver_id INTEGER,
+      message TEXT,
+      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
 
