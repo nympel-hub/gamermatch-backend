@@ -528,7 +528,26 @@ io.on('connection', (socket) => {
   socket.on('accept_match', ({ roomId }) => {
     const match = pendingMatches[roomId];
     if (match) {
-      // ตรวจสอบว่าคนที่ส่งคำขออยู่ในรายชื่อที่จับคู่จริงๆ
+      if (match.type === 'lobby_join') {
+        const lobby = lobbies[match.lobbyId];
+        if (lobby && lobby.users.length < lobby.maxPlayers) {
+          lobby.users.push({ socketId: match.soloPlayer.socketId, dbId: match.soloPlayer.user.id, name: match.soloPlayer.user.username, profile: match.soloPlayer.user });
+          const userSocket = io.sockets.sockets.get(match.soloPlayer.socketId);
+          if (userSocket) {
+            userSocket.join(lobby.id);
+            userSocket.emit('lobby_updated', lobby);
+          }
+          io.to(lobby.id).emit('lobby_updated', lobby);
+          
+          if (lobby.users.length >= lobby.maxPlayers) {
+            lobby.isFilling = false;
+            io.to(lobby.id).emit('lobby_updated', lobby);
+          }
+        }
+        delete pendingMatches[roomId];
+        return;
+      }
+
       if (!match.users.some(u => u.id === socket.id)) return;
 
       if (!match.accepted.includes(socket.id)) {
@@ -545,7 +564,7 @@ io.on('connection', (socket) => {
               roomId, 
               users: match.users, 
               opponentDbId: opponentData.dbId,
-              opponentProfile: opponentData.profile // ส่งโปรไฟล์ศัตรูไปให้อวดกันได้
+              opponentProfile: opponentData.profile
           });
         });
         delete pendingMatches[roomId];
@@ -634,9 +653,9 @@ io.on('connection', (socket) => {
        }
     }
   });
-});
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
