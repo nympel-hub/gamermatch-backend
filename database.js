@@ -87,6 +87,9 @@ async function initDB() {
       }
     };
     
+        await pool.query(`
+      ALTER TABLE user_ranks ADD COLUMN IF NOT EXISTS role VARCHAR(255) DEFAULT 'Flex';
+    `).catch(e => console.log('Notice: ' + e.message));
     console.log("Connected to PostgreSQL Cloud Database successfully.");
     return dbInstance;
     
@@ -117,7 +120,7 @@ async function initDB() {
         avatar_url TEXT
       );
       CREATE TABLE IF NOT EXISTS friends (user_id INTEGER, friend_id INTEGER, PRIMARY KEY (user_id, friend_id));
-      CREATE TABLE IF NOT EXISTS user_ranks (user_id INTEGER, game TEXT, rank TEXT, PRIMARY KEY (user_id, game));
+      CREATE TABLE IF NOT EXISTS user_ranks (user_id INTEGER, game TEXT, rank TEXT, role TEXT DEFAULT 'Flex', PRIMARY KEY (user_id, game));
       CREATE TABLE IF NOT EXISTS dms (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         sender_id INTEGER, receiver_id INTEGER, message TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP

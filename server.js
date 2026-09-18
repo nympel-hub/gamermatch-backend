@@ -139,7 +139,7 @@ app.post('/api/verify_identity', async (req, res) => {
 app.post('/api/get_ranks', async (req, res) => {
   const { userId } = req.body;
   try {
-    const ranks = await db.all('SELECT game, rank FROM user_ranks WHERE user_id = ?', [userId]);
+    const ranks = await db.all('SELECT game, rank, role FROM user_ranks WHERE user_id = ?', [userId]);
     res.json({ success: true, ranks });
   } catch (err) {
     res.status(500).json({ error: err.message });
