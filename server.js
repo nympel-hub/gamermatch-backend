@@ -628,8 +628,6 @@ io.on('connection', (socket) => {
       if (!isUserAuthorizedForRoom(socket.id, roomId)) return;
       socket.to(roomId).emit('webrtc_ice_candidate', { candidate, sender: socket.id, roomId });
     });
-  });
-
   // 6. การออกจากห้อง
   socket.on('leave_room', async ({ roomId }) => {
      if (!isUserAuthorizedForRoom(socket.id, roomId)) return;
@@ -666,6 +664,8 @@ io.on('connection', (socket) => {
        }
     }
   });
+
+});
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
