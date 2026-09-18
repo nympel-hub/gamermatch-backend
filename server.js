@@ -44,7 +44,7 @@ app.post('/api/register', async (req, res) => {
       [username, hashedPassword, email, emailToken, gender || 'Any', age || 18, isVip]
     );
 
-    const user = await db.get(`SELECT id, username, email, email_verified, gender, age, is_vip, exp, game_rank, is_verified, bio, play_role, avatar_id FROM users WHERE id = ?`, [result.lastID]);
+    const user = await db.get(`SELECT id, username, email, email_verified, gender, age, is_vip, exp, game_rank, is_verified, bio, play_role, avatar_id, avatar_url FROM users WHERE id = ?`, [result.lastID]);
     
     // เราจะส่ง emailToken กลับไปให้ Client จำลองการคลิกลิงก์ในอีเมล (เพื่อการทดสอบ)
     res.json({ 
@@ -66,7 +66,7 @@ app.post('/api/verify_email', async (req, res) => {
     
     await db.run('UPDATE users SET email_verified = 1, email_token = NULL WHERE id = ?', [user.id]);
     
-    const safeUser = { id: user.id, username: user.username, email: user.email, email_verified: 1, gender: user.gender, age: user.age, is_vip: user.is_vip, exp: user.exp, game_rank: user.game_rank, is_verified: user.is_verified, bio: user.bio, play_role: user.play_role, avatar_id: user.avatar_id };
+    const safeUser = { id: user.id, username: user.username, email: user.email, email_verified: 1, gender: user.gender, age: user.age, is_vip: user.is_vip, exp: user.exp, game_rank: user.game_rank, is_verified: user.is_verified, bio: user.bio, play_role: user.play_role, avatar_id: user.avatar_id, avatar_url: user.avatar_url };
     const jwtToken = jwt.sign({ id: user.id, username: user.username, is_vip: user.is_vip }, JWT_SECRET, { expiresIn: '7d' });
     
     res.json({ token: jwtToken, user: safeUser });
@@ -76,9 +76,9 @@ app.post('/api/verify_email', async (req, res) => {
 });
 
 app.post('/api/update_profile', async (req, res) => {
-  const { userId, bio, playRole, avatarId } = req.body;
+  const { userId, bio, playRole, avatarUrl } = req.body;
   try {
-    await db.run('UPDATE users SET bio = ?, play_role = ?, avatar_id = ? WHERE id = ?', [bio, playRole, avatarId, userId]);
+    await db.run('UPDATE users SET bio = ?, play_role = ?, avatar_url = ? WHERE id = ?', [bio, playRole, avatarUrl, userId]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -98,7 +98,7 @@ app.post('/api/login', async (req, res) => {
     const token = jwt.sign({ id: user.id, username: user.username, is_vip: user.is_vip }, JWT_SECRET);
     
     if (!user.email_verified) return res.status(403).json({ error: 'Email not verified. Please check your simulated email link.' });
-    res.json({ token, user: { id: user.id, username: user.username, email: user.email, email_verified: user.email_verified, gender: user.gender, age: user.age, is_vip: user.is_vip, exp: user.exp, game_rank: user.game_rank, is_verified: user.is_verified, bio: user.bio, play_role: user.play_role, avatar_id: user.avatar_id } });
+    res.json({ token, user: { id: user.id, username: user.username, email: user.email, email_verified: user.email_verified, gender: user.gender, age: user.age, is_vip: user.is_vip, exp: user.exp, game_rank: user.game_rank, is_verified: user.is_verified, bio: user.bio, play_role: user.play_role, avatar_id: user.avatar_id, avatar_url: user.avatar_url } });
 
   } catch (err) {
     res.status(500).json({ error: err.message });

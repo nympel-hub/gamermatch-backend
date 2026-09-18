@@ -23,7 +23,8 @@ async function initDB() {
       email_token TEXT,
       bio TEXT,
       play_role TEXT,
-      avatar_id INTEGER DEFAULT 1
+      avatar_id INTEGER DEFAULT 1,
+      avatar_url TEXT
     );
 
     CREATE TABLE IF NOT EXISTS friends (
@@ -64,6 +65,7 @@ async function initDB() {
       await db.exec("ALTER TABLE users ADD COLUMN bio TEXT DEFAULT 'I love gaming!'");
       await db.exec("ALTER TABLE users ADD COLUMN play_role TEXT DEFAULT 'Flex'");
       await db.exec("ALTER TABLE users ADD COLUMN avatar_id INTEGER DEFAULT 1");
+      await db.exec("ALTER TABLE users ADD COLUMN avatar_url TEXT");
       console.log("Database updated: Added Email and Profile columns.");
   }
 
