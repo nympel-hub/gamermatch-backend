@@ -290,6 +290,19 @@ io.on('connection', (socket) => {
       }
     });
 
+    socket.on('remove_friend', async ({ friendId }) => {
+      try {
+        await db.run(`DELETE FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)`, [userId, friendId, friendId, userId]);
+        loadFriends();
+        const friendSocket = onlineUsers[friendId];
+        if (friendSocket) {
+          io.to(friendSocket).emit('refresh_friends');
+        }
+      } catch (err) {
+        console.error("Error removing friend:", err);
+      }
+    });
+
 
   // 1. ระบบคิวและจับคู่
   
