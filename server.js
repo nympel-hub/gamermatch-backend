@@ -183,9 +183,10 @@ io.use((socket, next) => {
 });
 
 const isUserAuthorizedForRoom = (socketId, roomId) => {
-  if (!activeRooms[roomId]) return false;
-  return activeRooms[roomId].some(user => user.id === socketId);
-};
+    if (activeRooms[roomId]) return activeRooms[roomId].some(user => user.id === socketId);
+    if (lobbies[roomId]) return lobbies[roomId].users.some(user => user.socketId === socketId);
+    return false;
+  };
 
 // เก็บรายชื่อคนที่ออนไลน์ { userId: socketId }
 let onlineUsers = {};
@@ -426,18 +427,21 @@ io.on('connection', (socket) => {
             
             // Check if solo matches lobby prefs (using lobby host's profile as target)
             if (checkMatchPrefs(solo, { prefs: lobby.prefs, user: lobby.users[0].profile }) && lobby.users.length < lobby.maxPlayers) {
-              lobby.users.push({ socketId: solo.socketId, dbId: solo.user.id, name: solo.user.username, profile: solo.user });
-              const userSocket = io.sockets.sockets.get(solo.socketId);
-              if (userSocket) userSocket.join(lobbyId);
-              
+              const pendingId = `lobby_join_${lobbyId}_${solo.user.id}`;
+              pendingMatches[pendingId] = {
+                type: 'lobby_join',
+                lobbyId: lobbyId,
+                soloPlayer: solo,
+                accepted: []
+              };
+              io.to(solo.socketId).emit('match_found', { 
+                roomId: pendingId, 
+                opponent: lobby.users[0].name + "'s Party", 
+                opponentProfile: lobby.users[0].profile,
+                isLobbyJoin: true,
+                lobbyDetails: lobby
+              });
               queue.splice(i, 1);
-              io.to(lobbyId).emit('lobby_updated', lobby);
-              
-              if (lobby.users.length >= lobby.maxPlayers) {
-                lobby.isFilling = false;
-                io.to(lobbyId).emit('lobby_updated', lobby);
-                break;
-              }
             }
           }
         }
