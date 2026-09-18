@@ -403,7 +403,7 @@ io.on('connection', (socket) => {
     io.to(lobbyId).emit('lobby_updated', lobby);
   });
 
-  socket.on('leave_lobby', ({ lobbyId }) => {
+  socket.on('leave_lobby', ({ lobbyId, userId }) => {
     const lobby = lobbies[lobbyId];
     if (lobby) {
       lobby.users = lobby.users.filter(u => u.socketId !== socket.id);
