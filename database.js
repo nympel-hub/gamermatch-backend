@@ -48,10 +48,17 @@ async function initDB() {
       );
       
       CREATE TABLE IF NOT EXISTS friends (
-        user_id INTEGER,
-        friend_id INTEGER,
-        PRIMARY KEY (user_id, friend_id)
-      );
+          user_id INTEGER,
+          friend_id INTEGER,
+          PRIMARY KEY (user_id, friend_id)
+        );
+        CREATE TABLE IF NOT EXISTS friend_requests (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          sender_id INTEGER,
+          receiver_id INTEGER,
+          status TEXT DEFAULT 'pending',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
 
       CREATE TABLE IF NOT EXISTS user_ranks (
         user_id INTEGER,

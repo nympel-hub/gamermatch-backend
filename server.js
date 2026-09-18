@@ -226,23 +226,70 @@ io.on('connection', (socket) => {
     loadFriends();
   });
 
-  socket.on('add_friend', async ({ friendId }) => {
-    try {
-      if (friendId === userId) return;
-      const existing = await db.get(`SELECT * FROM friends WHERE user_id = ? AND friend_id = ?`, [userId, friendId]);
-      if (!existing) {
-        await db.run(`INSERT INTO friends (user_id, friend_id) VALUES (?, ?)`, [userId, friendId]);
-        await db.run(`INSERT INTO friends (user_id, friend_id) VALUES (?, ?)`, [friendId, userId]);
+  
+    socket.on('get_friend_requests', async () => {
+      try {
+        const requests = await db.all(`
+          SELECT fr.id, fr.sender_id, u.username, u.exp, u.is_vip, u.avatar_id
+          FROM friend_requests fr
+          JOIN users u ON fr.sender_id = u.id
+          WHERE fr.receiver_id = ? AND fr.status = 'pending'
+        `, [userId]);
+        socket.emit('friend_requests_list', requests);
+      } catch (err) {
+        console.error(err);
       }
-      loadFriends();
-      const friendSocket = onlineUsers[friendId];
-      if (friendSocket) {
-        io.to(friendSocket).emit('refresh_friends');
+    });
+
+    socket.on('send_friend_request', async ({ friendId }) => {
+      try {
+        if (friendId === userId) return;
+        
+        const existingFriend = await db.get(`SELECT * FROM friends WHERE user_id = ? AND friend_id = ?`, [userId, friendId]);
+        if (existingFriend) return;
+        
+        const existingRequest = await db.get(`SELECT * FROM friend_requests WHERE sender_id = ? AND receiver_id = ? AND status = 'pending'`, [userId, friendId]);
+        if (existingRequest) return;
+        
+        await db.run(`INSERT INTO friend_requests (sender_id, receiver_id) VALUES (?, ?)`, [userId, friendId]);
+        
+        const targetSocket = onlineUsers[friendId];
+        if (targetSocket) {
+          io.to(targetSocket).emit('friend_request_received');
+        }
+      } catch (err) {
+        console.error("Error sending friend request:", err);
       }
-    } catch (err) {
-      console.error("Error adding friend:", err);
-    }
-  });
+    });
+
+    socket.on('accept_friend_request', async ({ requestId, senderId }) => {
+      try {
+        await db.run(`UPDATE friend_requests SET status = 'accepted' WHERE id = ?`, [requestId]);
+        
+        const existing = await db.get(`SELECT * FROM friends WHERE user_id = ? AND friend_id = ?`, [userId, senderId]);
+        if (!existing) {
+          await db.run(`INSERT INTO friends (user_id, friend_id) VALUES (?, ?)`, [userId, senderId]);
+          await db.run(`INSERT INTO friends (user_id, friend_id) VALUES (?, ?)`, [senderId, userId]);
+        }
+        
+        loadFriends();
+        const senderSocket = onlineUsers[senderId];
+        if (senderSocket) {
+          io.to(senderSocket).emit('refresh_friends');
+        }
+      } catch (err) {
+        console.error("Error accepting request:", err);
+      }
+    });
+
+    socket.on('decline_friend_request', async ({ requestId }) => {
+      try {
+        await db.run(`DELETE FROM friend_requests WHERE id = ?`, [requestId]);
+      } catch (err) {
+        console.error("Error declining request:", err);
+      }
+    });
+
 
   // 1. ระบบคิวและจับคู่
   
