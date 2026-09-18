@@ -10,9 +10,11 @@ function convertQuery(sql, params) {
   if (!isPostgres) return { sql, params };
   let i = 1;
   let pgSql = sql.replace(/\?/g, () => `$${i++}`);
-  // สำหรับ Postgres คำสั่ง INSERT ต้องเติม RETURNING id เพื่อดึง ID ล่าสุดกลับมา
+  // สำหรับ Postgres คำสั่ง INSERT ต้องเติม RETURNING id เฉพาะตารางที่มี id (users, dms)
   if (pgSql.trim().toUpperCase().startsWith('INSERT') && !pgSql.toUpperCase().includes('RETURNING')) {
-    pgSql += ' RETURNING id';
+    if (pgSql.includes('INTO users') || pgSql.includes('INTO dms')) {
+      pgSql += ' RETURNING id';
+    }
   }
   return { sql: pgSql, params };
 }
