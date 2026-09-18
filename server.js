@@ -523,20 +523,28 @@ io.on('connection', (socket) => {
   });
   
   // 5. ระบบเชื่อมต่อเสียง (WebRTC Signaling)
-  socket.on('request_voice_connections', ({ roomId }) => { if (!isUserAuthorizedForRoom(socket.id, roomId)) return; socket.to(roomId).emit('voice_connection_requested', { sender: socket.id, roomId }); });
-  socket.on('webrtc_offer', ({ roomId, offer }) => {
-    if (!isUserAuthorizedForRoom(socket.id, roomId)) return;
-    socket.to(roomId).emit('webrtc_offer', { offer, sender: socket.id, roomId });
-  });
-
-  socket.on('webrtc_answer', ({ roomId, answer }) => {
-    if (!isUserAuthorizedForRoom(socket.id, roomId)) return;
-    socket.to(roomId).emit('webrtc_answer', { answer, sender: socket.id, roomId });
-  });
-
-  socket.on('webrtc_ice_candidate', ({ roomId, candidate }) => {
-    if (!isUserAuthorizedForRoom(socket.id, roomId)) return;
-    socket.to(roomId).emit('webrtc_ice_candidate', { candidate, sender: socket.id, roomId });
+  socket.on('request_voice_connections', ({ roomId }) => { 
+      if (!isUserAuthorizedForRoom(socket.id, roomId)) { console.log('Unauthorized request_voice', socket.id, roomId); return; }
+      console.log('Voice connection requested by', socket.id, 'in', roomId);
+      socket.to(roomId).emit('voice_connection_requested', { sender: socket.id, roomId }); 
+    });
+    
+    socket.on('webrtc_offer', ({ roomId, offer }) => {
+      if (!isUserAuthorizedForRoom(socket.id, roomId)) { console.log('Unauthorized webrtc_offer', socket.id, roomId); return; }
+      console.log('Sending webrtc_offer from', socket.id, 'to room', roomId);
+      socket.to(roomId).emit('webrtc_offer', { offer, sender: socket.id, roomId });
+    });
+  
+    socket.on('webrtc_answer', ({ roomId, answer }) => {
+      if (!isUserAuthorizedForRoom(socket.id, roomId)) { console.log('Unauthorized webrtc_answer', socket.id, roomId); return; }
+      console.log('Sending webrtc_answer from', socket.id, 'to room', roomId);
+      socket.to(roomId).emit('webrtc_answer', { answer, sender: socket.id, roomId });
+    });
+  
+    socket.on('webrtc_ice_candidate', ({ roomId, candidate }) => {
+      if (!isUserAuthorizedForRoom(socket.id, roomId)) return;
+      socket.to(roomId).emit('webrtc_ice_candidate', { candidate, sender: socket.id, roomId });
+    });
   });
 
   // 6. การออกจากห้อง
