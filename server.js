@@ -277,6 +277,33 @@ io.on('connection', (socket) => {
 
   
   // === LOBBY SYSTEM ===
+  socket.on('convert_room_to_lobby', ({ roomId, user, targetSize }) => {
+    try {
+      const match = pendingMatches[roomId];
+      if (!match) return;
+      const lobbyId = Math.random().toString(36).substring(2, 8).toUpperCase();
+      lobbies[lobbyId] = {
+        id: lobbyId,
+        host: user.id,
+        maxPlayers: targetSize || 5,
+        prefs: { targetGame: 'Any', targetGender: 'Any', targetRole: 'Any', userRankForGame: 'Unranked' },
+        users: match.users,
+        isFilling: true
+      };
+      match.users.forEach(u => {
+        const uSocket = io.sockets.sockets.get(u.id); // u.id is socketId here
+        if (uSocket) {
+          uSocket.join(lobbyId);
+          uSocket.emit('lobby_created', lobbies[lobbyId]);
+          uSocket.emit('lobby_updated', lobbies[lobbyId]);
+        }
+      });
+      tryMatch();
+    } catch(err) {
+      console.error(err);
+    }
+  });
+
   socket.on('create_lobby', ({ user, prefs, maxPlayers }) => {
     try {
       console.log('Received create_lobby from', user.username);
